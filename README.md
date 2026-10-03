@@ -46,7 +46,7 @@ python -m pip install telethon rich
 
 ## Configure
 
-Edit the configuration constants near the top of [`(async_downloader.py`](./%28async_downloader.py):
+Edit the configuration constants near the top of [`async_downloader.py`](./%28async_downloader.py):
 
 - `API_ID`: Your numeric API ID from my.telegram.org.
 - `API_HASH`: Your API hash from my.telegram.org. Keep it private.
@@ -61,13 +61,13 @@ The first run may ask for your phone number, the login code Telegram sends you, 
 With the virtual environment activated, run:
 
 ```powershell
-python '.\(async_downloader.py'
+python '.\async_downloader.py'
 ```
 
 Or run it without activating the environment:
 
 ```powershell
-.\.venv\Scripts\python.exe '.\(async_downloader.py'
+.\.venv\Scripts\python.exe '.\async_downloader.py'
 ```
 
 The script scans the chat from older messages to newer messages, downloads messages containing video documents, and saves each file under `downloads/` with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
