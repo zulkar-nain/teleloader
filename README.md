@@ -73,7 +73,3 @@ Or run it without activating the environment:
 The script scans the chat from older messages to newer messages, downloads messages containing video documents, and saves each file under `downloads/` with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
 
 Press `Ctrl+C` to stop the process. A later run can download files that are still missing.
-
-## Credentials and generated files
-
-The repository's `.gitignore` excludes `.venv/`, `.venv-1/`, `downloads/`, and Telethon `.session` files. Keep API credentials and session files private even though they are ignored by Git. If credentials or a session file are exposed, revoke or regenerate credentials where applicable and terminate active sessions through Telegram's security settings.
