@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TeleLoader</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>TeleLoader</h1>
+      <span id="status" class="badge">connecting</span>
+    </header>
+
+    <section class="card controls">
+      <div class="field">
+        <label for="chat">Chat</label>
+        <div class="inline">
+          <select id="chat"><option value="">Loading chats...</option></select>
+          <button id="refresh" type="button" class="secondary" title="Reload chats">Refresh</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="dir">Download folder</label>
+        <div class="inline">
+          <input id="dir" type="text" spellcheck="false">
+          <button id="browse" type="button" class="secondary">Browse</button>
+        </div>
+      </div>
+      <div class="field narrow">
+        <label for="workers">Concurrent downloads</label>
+        <input id="workers" type="number" min="1" max="8" value="3">
+      </div>
+      <div class="actions">
+        <button id="start" type="button" class="primary" disabled>Start</button>
+        <button id="stop" type="button" class="danger" disabled>Stop</button>
+        <span id="form-error" class="form-error"></span>
+      </div>
+    </section>
+
+    <section class="card overall">
+      <div class="bar big"><div id="overall-fill" class="fill"></div></div>
+      <div class="overall-meta">
+        <span id="overall-pct">0%</span>
+        <span id="overall-bytes">0 B / 0 B</span>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="card"><div class="label">Files</div><div class="value" id="files">0 / 0</div></div>
+      <div class="card"><div class="label">Downloaded</div><div class="value" id="size">0 B</div></div>
+      <div class="card"><div class="label">Speed</div><div class="value" id="speed">0 B/s</div></div>
+      <div class="card"><div class="label">ETA</div><div class="value" id="eta">--</div></div>
+      <div class="card"><div class="label">Skipped</div><div class="value" id="skipped">0</div></div>
+      <div class="card"><div class="label">Failed</div><div class="value" id="failed">0</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Active downloads</h2>
+      <div id="active" class="active"><p class="empty">Nothing downloading</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <ul id="log" class="log"></ul>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

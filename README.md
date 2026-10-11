@@ -35,41 +35,40 @@ Install the libraries into the active environment:
 
 ```sh
 python -m pip install --upgrade pip
-python -m pip install telethon rich cryptg
+python -m pip install telethon aiohttp cryptg
 ```
 
 `cryptg` is an optional acceleration library for Telethon. If it cannot be installed for your Python version or platform, install the required packages without it:
 
 ```sh
-python -m pip install telethon rich
+python -m pip install telethon aiohttp
 ```
 
 ## Configure
 
-Edit the configuration constants near the top of [`async_downloader.py`](./%28async_downloader.py):
+Provide your credentials from my.telegram.org as environment variables (never hardcode them). In PowerShell, for the current session:
 
-- `API_ID`: Your numeric API ID from my.telegram.org.
-- `API_HASH`: Your API hash from my.telegram.org. Keep it private.
-- `CHAT_TARGET`: The chat's numeric ID or a username Telethon can resolve, such as `"public_group"`.
-- `OUTPUT_DIR`: Destination directory for downloaded files. Defaults to `./downloads`.
-- `MAX_CONCURRENT_DOWNLOADS`: Number of asynchronous workers. Start with `1` or `2`; increasing concurrency can cause Telegram to apply FloodWait delays.
+```powershell
+$env:TELEGRAM_API_ID = "12345678"
+$env:TELEGRAM_API_HASH = "your_api_hash"
+```
 
-The first run may ask for your phone number, the login code Telegram sends you, and your two-step verification password if enabled. Telethon stores the authorized session locally as `session_downloader.session`. Treat this file like a password: anyone who obtains it may be able to access your Telegram account. Do not share it or commit it.
+On macOS or Linux, use `export TELEGRAM_API_ID=...` and `export TELEGRAM_API_HASH=...`.
+
+The first run asks in the terminal for your phone number, the login code Telegram sends you, and your two-step verification password if enabled. Telethon stores the authorized session locally as `session_downloader.session`. Treat this file like a password: anyone who obtains it may be able to access your Telegram account. Do not share it or commit it.
+
+The chat, download folder, and number of concurrent downloads are chosen in the web UI, not in code.
 
 ## Run
 
-With the virtual environment activated, run:
+With the virtual environment activated and the variables set:
 
 ```powershell
-python '.\async_downloader.py'
+python .\async_downloader.py
 ```
 
-Or run it without activating the environment:
+Open http://127.0.0.1:8080. Pick a chat from the dropdown, choose a download folder (type a path or use Browse), set the concurrent downloads (1-8; start with 2-3, since higher values can cause FloodWait delays), then press Start. Stop cancels the run and removes any partially downloaded file.
 
-```powershell
-.\.venv\Scripts\python.exe '.\async_downloader.py'
-```
+The script scans the chat from older messages to newer messages, downloads messages containing video documents, and saves each file with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
 
-The script scans the chat from older messages to newer messages, downloads messages containing video documents, and saves each file under `downloads/` with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
-
-Press `Ctrl+C` to stop the process. A later run can download files that are still missing.
+Press `Ctrl+C` in the terminal to quit. A later run can download files that are still missing.
