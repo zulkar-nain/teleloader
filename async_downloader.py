@@ -8,7 +8,7 @@ from pathlib import Path
 from aiohttp import web
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError, RPCError
-from telethon.tl.types import MessageMediaDocument
+from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
 UI_HOST = "127.0.0.1"  # Keep local: this process holds your Telegram session
 UI_PORT = 8080
@@ -16,6 +16,21 @@ WEB_DIR = Path(__file__).parent / "web"
 DEFAULT_OUTPUT_DIR = "./downloads"
 DEFAULT_WORKERS = 3
 MAX_WORKERS = 8  # Higher values quickly trigger FloodWait
+MEDIA_KINDS = ("video", "photo", "audio", "file")
+DEFAULT_MEDIA = ["video"]
+
+
+def media_kind(message):
+    media = message.media
+    if isinstance(media, MessageMediaPhoto):
+        return "photo"
+    if isinstance(media, MessageMediaDocument) and media.document:
+        mime = getattr(media.document, "mime_type", "") or ""
+        for prefix, kind in (("video/", "video"), ("image/", "photo"), ("audio/", "audio")):
+            if mime.startswith(prefix):
+                return kind
+        return "file"
+    return None
 
 
 def load_credentials():
@@ -31,7 +46,13 @@ class State:
     """Shared download state, serialized to the browser UI."""
 
     def __init__(self):
-        self.config = {"chat_id": None, "chat_name": "", "output_dir": DEFAULT_OUTPUT_DIR, "workers": DEFAULT_WORKERS}
+        self.config = {
+            "chat_id": None,
+            "chat_name": "",
+            "output_dir": DEFAULT_OUTPUT_DIR,
+            "workers": DEFAULT_WORKERS,
+            "media_types": DEFAULT_MEDIA,
+        }
         self.logs = deque(maxlen=100)
         self.reset()
 
@@ -45,8 +66,8 @@ class State:
         self.failures = []  # {id, name, size, error, t}
         self.finished_bytes = 0
         self.active = {}  # msg_id -> {id, name, worker, current, total}
-        self.started_at = None
-        self.finished_at = None
+        self.started_at: float | None = None
+        self.finished_at: float | None = None
 
     def log(self, level: str, text: str):
         self.logs.append({"t": time.strftime("%H:%M:%S"), "level": level, "text": text})
@@ -82,11 +103,12 @@ class State:
 
 
 class TelegramBatchDownloader:
-    def __init__(self, client: TelegramClient, output_dir: str, state: State, max_workers: int):
+    def __init__(self, client: TelegramClient, output_dir: str, state: State, max_workers: int, media_types):
         self.client = client
         self.output_dir = output_dir
         self.state = state
         self.max_workers = max_workers
+        self.media_types = set(media_types)
         self.queue = asyncio.Queue()
         self.resume = asyncio.Event()  # cleared while paused
         self.resume.set()
@@ -103,7 +125,8 @@ class TelegramBatchDownloader:
 
             msg_id = message.id
             size = message.file.size or 0
-            file_name = f"{msg_id}_{message.file.name or 'video.mp4'}"
+            kind = media_kind(message) or "file"
+            file_name = f"{msg_id}_{message.file.name or kind + (message.file.ext or '')}"
             file_path = os.path.join(self.output_dir, file_name)
 
             if os.path.exists(file_path):
@@ -127,7 +150,7 @@ class TelegramBatchDownloader:
                     await self.client.download_media(
                         message,
                         file=file_path,
-                        progress_callback=progress_callback,
+                        progress_callback=progress_callback,  # type: ignore  # Telethon awaits async callbacks; stubs say sync only
                     )
                     download_success = True
                     state.completed += 1
@@ -161,24 +184,22 @@ class TelegramBatchDownloader:
         state = self.state
         state.status = "scanning"
         state.started_at = time.time()
-        state.log("info", f"Scanning '{state.config['chat_name']}' for videos...")
+        state.log("info", f"Scanning '{state.config['chat_name']}' for: {', '.join(sorted(self.media_types))}")
 
         async for message in self.client.iter_messages(chat_id, reverse=True):
-            if message.media and isinstance(message.media, MessageMediaDocument):
-                mime = message.media.document.mime_type or ""
-                if mime.startswith("video/"):
-                    state.total_files += 1
-                    state.total_bytes += message.file.size or 0
-                    await self.queue.put(message)
+            if message.file and media_kind(message) in self.media_types:
+                state.total_files += 1
+                state.total_bytes += message.file.size or 0
+                await self.queue.put(message)
 
         if state.total_files == 0:
             state.status = "done"
             state.finished_at = time.time()
-            state.log("info", "No video files found.")
+            state.log("info", "No matching files found.")
             return
 
         state.status = "downloading"
-        state.log("info", f"Queued {state.total_files} videos; starting {self.max_workers} workers")
+        state.log("info", f"Queued {state.total_files} files; starting {self.max_workers} workers")
 
         workers = [asyncio.create_task(self.worker(i + 1)) for i in range(self.max_workers)]
         try:
@@ -211,20 +232,21 @@ class Controller:
     def running(self) -> bool:
         return self.task is not None and not self.task.done()
 
-    def start(self, chat_id: int, chat_name: str, output_dir: str, workers: int):
+    def start(self, chat_id: int, chat_name: str, output_dir: str, workers: int, media_types: list):
         self.state.reset()
         self.state.config = {
             "chat_id": chat_id,
             "chat_name": chat_name,
             "output_dir": output_dir,
             "workers": workers,
+            "media_types": media_types,
         }
-        self.task = asyncio.create_task(self._run(chat_id, output_dir, workers))
+        self.task = asyncio.create_task(self._run(chat_id, output_dir, workers, media_types))
 
-    async def _run(self, chat_id: int, output_dir: str, workers: int):
+    async def _run(self, chat_id: int, output_dir: str, workers: int, media_types: list):
         state = self.state
         try:
-            downloader = TelegramBatchDownloader(self.client, output_dir, state, workers)
+            downloader = TelegramBatchDownloader(self.client, output_dir, state, workers, media_types)
             self.downloader = downloader
             await downloader.run(chat_id)
         except asyncio.CancelledError:
@@ -238,19 +260,19 @@ class Controller:
             state.finished_at = time.time()
 
     def pause(self):
-        if self.running and self.state.status == "downloading":
+        if self.downloader and self.running and self.state.status == "downloading":
             self.downloader.resume.clear()
             self.state.status = "paused"
             self.state.log("info", "Paused")
 
     def resume(self):
-        if self.running and self.state.status == "paused":
+        if self.downloader and self.running and self.state.status == "paused":
             self.downloader.resume.set()
             self.state.status = "downloading"
             self.state.log("info", "Resumed")
 
     async def stop(self):
-        if self.running:
+        if self.task and self.running:
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
 
@@ -318,8 +340,11 @@ def build_app(ctl: Controller) -> web.Application:
             chat_id = int(body["chat_id"])
             workers = max(1, min(MAX_WORKERS, int(body["workers"])))
             output = str(body["output_dir"]).strip()
+            media_types = [k for k in MEDIA_KINDS if k in body["media_types"]]
         except (KeyError, ValueError, TypeError):
             return error("Invalid request.")
+        if not media_types:
+            return error("Select at least one media type.")
         if not output:
             return error("Choose a download folder.")
         try:
@@ -327,7 +352,7 @@ def build_app(ctl: Controller) -> web.Application:
             out.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             return error(f"Cannot use that folder: {e}")
-        ctl.start(chat_id, str(body.get("chat_name", ""))[:200], str(out), workers)
+        ctl.start(chat_id, str(body.get("chat_name", ""))[:200], str(out), workers, media_types)
         return web.json_response({"ok": True})
 
     async def stop(_request):

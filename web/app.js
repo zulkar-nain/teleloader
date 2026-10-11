@@ -130,9 +130,14 @@ async function api(url, body) {
   return data;
 }
 
+function selectedMedia() {
+  return [...document.querySelectorAll("#media input:checked")].map((c) => c.value);
+}
+
 function updateControls() {
   for (const id of ["chat", "refresh", "dir", "browse", "workers"]) $(id).disabled = running;
-  $("start").disabled = running || !$("chat").value;
+  for (const c of document.querySelectorAll("#media input")) c.disabled = running;
+  $("start").disabled = running || !$("chat").value || !selectedMedia().length;
   $("pause").disabled = status !== "downloading" && status !== "paused";
   $("pause").textContent = status === "paused" ? "Resume" : "Pause";
   $("stop").disabled = !running;
@@ -167,6 +172,7 @@ function syncForm(s) {
   if (!formInit) {
     $("dir").value = s.config.output_dir;
     $("workers").value = s.config.workers;
+    for (const c of document.querySelectorAll("#media input")) c.checked = s.config.media_types.includes(c.value);
     wantedChat = s.config.chat_id;
     formInit = true;
     loadChats();
@@ -174,6 +180,7 @@ function syncForm(s) {
   updateControls();
 }
 
+$("media").addEventListener("change", updateControls);
 $("chat").addEventListener("change", updateControls);
 $("refresh").addEventListener("click", loadChats);
 
@@ -194,6 +201,7 @@ $("start").addEventListener("click", async () => {
       chat_name: opt.dataset.name || "",
       output_dir: $("dir").value,
       workers: $("workers").value,
+      media_types: selectedMedia(),
     });
     running = true;
     updateControls();

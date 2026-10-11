@@ -57,7 +57,7 @@ On macOS or Linux, use `export TELEGRAM_API_ID=...` and `export TELEGRAM_API_HAS
 
 The first run asks in the terminal for your phone number, the login code Telegram sends you, and your two-step verification password if enabled. Telethon stores the authorized session locally as `session_downloader.session`. Treat this file like a password: anyone who obtains it may be able to access your Telegram account. Do not share it or commit it.
 
-The chat, download folder, and number of concurrent downloads are chosen in the web UI, not in code.
+The chat, download folder, media types (videos, photos, audio, other files), and number of concurrent downloads are chosen in the web UI, not in code.
 
 ## Run
 
@@ -69,6 +69,6 @@ python .\async_downloader.py
 
 Open http://127.0.0.1:8080. Pick a chat from the dropdown, choose a download folder (type a path or use Browse), set the concurrent downloads (1-8; start with 2-3, since higher values can cause FloodWait delays), then press Start. Stop cancels the run and removes any partially downloaded file.
 
-The script scans the chat from older messages to newer messages, downloads messages containing video documents, and saves each file with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
+The script scans the chat from older messages to newer messages, downloads messages containing the selected media types, and saves each file with its Telegram message ID prefixed to the filename. Files already present at the expected path are skipped. FloodWait errors pause the affected worker for the duration Telegram specifies, plus a short random delay.
 
 Press `Ctrl+C` in the terminal to quit. A later run can download files that are still missing.
