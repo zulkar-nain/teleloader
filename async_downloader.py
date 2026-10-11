@@ -36,12 +36,13 @@ class State:
         self.reset()
 
     def reset(self):
-        self.status = "idle"  # idle | scanning | downloading | done | stopped | error
+        self.status = "idle"  # idle | scanning | downloading | paused | done | stopped | error
         self.total_files = 0
         self.total_bytes = 0
         self.completed = 0
         self.skipped = 0
         self.failed = 0
+        self.failures = []  # {id, name, size, error, t}
         self.finished_bytes = 0
         self.active = {}  # msg_id -> {id, name, worker, current, total}
         self.started_at = None
@@ -49,6 +50,17 @@ class State:
 
     def log(self, level: str, text: str):
         self.logs.append({"t": time.strftime("%H:%M:%S"), "level": level, "text": text})
+
+    def add_failure(self, msg_id: int, name: str, size: int, err: Exception):
+        self.failed += 1
+        self.failures.append({
+            "id": msg_id,
+            "name": name,
+            "size": size,
+            "error": f"{type(err).__name__}: {err}",
+            "t": time.strftime("%H:%M:%S"),
+        })
+        self.log("error", f"Failed msg {msg_id}: {err}")
 
     def snapshot(self) -> dict:
         in_progress = sum(a["current"] for a in self.active.values())
@@ -61,6 +73,7 @@ class State:
             "completed": self.completed,
             "skipped": self.skipped,
             "failed": self.failed,
+            "failures": self.failures,
             "downloaded_bytes": self.finished_bytes + in_progress,
             "elapsed": (end - self.started_at) if self.started_at else 0,
             "active": list(self.active.values()),
@@ -75,11 +88,14 @@ class TelegramBatchDownloader:
         self.state = state
         self.max_workers = max_workers
         self.queue = asyncio.Queue()
+        self.resume = asyncio.Event()  # cleared while paused
+        self.resume.set()
 
     async def worker(self, worker_id: int):
         """Worker task to consume and process messages from the queue."""
         state = self.state
         while True:
+            await self.resume.wait()
             message = await self.queue.get()
             if message is None:  # Sentinel to shut down worker
                 self.queue.task_done()
@@ -100,7 +116,8 @@ class TelegramBatchDownloader:
             entry = {"id": msg_id, "name": file_name, "worker": worker_id, "current": 0, "total": size}
             state.active[msg_id] = entry
 
-            def progress_callback(current: int, total: int):
+            async def progress_callback(current: int, total: int):
+                await self.resume.wait()  # holds the transfer while paused
                 entry["current"] = current
                 entry["total"] = total or entry["total"]
 
@@ -122,12 +139,10 @@ class TelegramBatchDownloader:
                     entry["current"] = 0
                     await asyncio.sleep(wait_time)
                 except RPCError as e:
-                    state.failed += 1
-                    state.log("error", f"RPC error on msg {msg_id}: {e}")
+                    state.add_failure(msg_id, file_name, size, e)
                     break
                 except Exception as e:
-                    state.failed += 1
-                    state.log("error", f"Unexpected error on msg {msg_id}: {e}")
+                    state.add_failure(msg_id, file_name, size, e)
                     break
                 finally:
                     if not download_success and os.path.exists(file_path):
@@ -190,6 +205,7 @@ class Controller:
         self.client = client
         self.state = state
         self.task = None
+        self.downloader = None
 
     @property
     def running(self) -> bool:
@@ -209,6 +225,7 @@ class Controller:
         state = self.state
         try:
             downloader = TelegramBatchDownloader(self.client, output_dir, state, workers)
+            self.downloader = downloader
             await downloader.run(chat_id)
         except asyncio.CancelledError:
             state.status = "stopped"
@@ -219,6 +236,18 @@ class Controller:
         finally:
             state.active.clear()
             state.finished_at = time.time()
+
+    def pause(self):
+        if self.running and self.state.status == "downloading":
+            self.downloader.resume.clear()
+            self.state.status = "paused"
+            self.state.log("info", "Paused")
+
+    def resume(self):
+        if self.running and self.state.status == "paused":
+            self.downloader.resume.set()
+            self.state.status = "downloading"
+            self.state.log("info", "Resumed")
 
     async def stop(self):
         if self.running:
@@ -305,6 +334,14 @@ def build_app(ctl: Controller) -> web.Application:
         await ctl.stop()
         return web.json_response({"ok": True})
 
+    async def pause(_request):
+        ctl.pause()
+        return web.json_response({"ok": True})
+
+    async def resume(_request):
+        ctl.resume()
+        return web.json_response({"ok": True})
+
     async def browse(request):
         try:
             body = await request.json()
@@ -323,6 +360,8 @@ def build_app(ctl: Controller) -> web.Application:
     app.router.add_get("/api/chats", chats)
     app.router.add_post("/api/start", start)
     app.router.add_post("/api/stop", stop)
+    app.router.add_post("/api/pause", pause)
+    app.router.add_post("/api/resume", resume)
     app.router.add_post("/api/browse", browse)
     app.router.add_static("/static/", WEB_DIR)
     return app

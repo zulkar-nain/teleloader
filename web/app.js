@@ -17,6 +17,32 @@ function fmtTime(sec) {
 let last = { bytes: 0, t: performance.now() };
 let speed = 0;
 
+function renderFailures(list) {
+  const ul = $("failed-list");
+  ul.replaceChildren();
+  if (!list.length) {
+    const li = document.createElement("li");
+    li.className = "f-meta";
+    li.textContent = "No failed downloads.";
+    ul.append(li);
+    return;
+  }
+  for (const f of list) {
+    const li = document.createElement("li");
+    const name = document.createElement("div");
+    name.className = "f-name";
+    name.textContent = f.name;
+    const meta = document.createElement("div");
+    meta.className = "f-meta";
+    meta.textContent = `Message ${f.id} - ${fmtBytes(f.size)} - ${f.t}`;
+    const err = document.createElement("div");
+    err.className = "f-error";
+    err.textContent = f.error;
+    li.append(name, meta, err);
+    ul.append(li);
+  }
+}
+
 function render(s) {
   const pct = s.total_bytes ? Math.min(100, (s.downloaded_bytes / s.total_bytes) * 100) : 0;
 
@@ -32,6 +58,7 @@ function render(s) {
   $("size").textContent = fmtBytes(s.downloaded_bytes);
   $("skipped").textContent = s.skipped;
   $("failed").textContent = s.failed;
+  if ($("failed-dialog").open) renderFailures(s.failures);
 
   const now = performance.now();
   const dt = (now - last.t) / 1000;
@@ -85,8 +112,10 @@ function render(s) {
 
 // --- Controls ---
 let running = false;
+let status = "idle";
 let formInit = false;
 let wantedChat = null;
+let lastFailures = [];
 
 function showError(msg) { $("form-error").textContent = msg || ""; }
 
@@ -104,6 +133,8 @@ async function api(url, body) {
 function updateControls() {
   for (const id of ["chat", "refresh", "dir", "browse", "workers"]) $(id).disabled = running;
   $("start").disabled = running || !$("chat").value;
+  $("pause").disabled = status !== "downloading" && status !== "paused";
+  $("pause").textContent = status === "paused" ? "Resume" : "Pause";
   $("stop").disabled = !running;
 }
 
@@ -130,7 +161,9 @@ async function loadChats() {
 }
 
 function syncForm(s) {
-  running = s.status === "scanning" || s.status === "downloading";
+  status = s.status;
+  running = status === "scanning" || status === "downloading" || status === "paused";
+  lastFailures = s.failures;
   if (!formInit) {
     $("dir").value = s.config.output_dir;
     $("workers").value = s.config.workers;
@@ -169,6 +202,19 @@ $("start").addEventListener("click", async () => {
 
 $("stop").addEventListener("click", async () => {
   try { await api("/api/stop"); } catch (err) { showError(err.message); }
+});
+
+$("pause").addEventListener("click", async () => {
+  try { await api(status === "paused" ? "/api/resume" : "/api/pause"); } catch (err) { showError(err.message); }
+});
+
+$("failed-card").addEventListener("click", () => {
+  renderFailures(lastFailures);
+  $("failed-dialog").showModal();
+});
+$("failed-close").addEventListener("click", () => $("failed-dialog").close());
+$("failed-dialog").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close();
 });
 
 const es = new EventSource("/api/events");

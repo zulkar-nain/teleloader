@@ -69,6 +69,7 @@ button.danger { background: transparent; border-color: var(--error); color: var(
 .bar { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
 .bar.big { height: 14px; }
 .fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+.badge.paused { background: rgba(210,153,34,.15); color: var(--warn); }
 .badge.done ~ * .fill, body.done #overall-fill { background: var(--ok); }
 
 .overall-meta { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); }
@@ -78,6 +79,27 @@ button.danger { background: transparent; border-color: var(--error); color: var(
 .stats .card { padding: 12px 14px; }
 .label { color: var(--muted); font-size: 12px; }
 .value { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.stat-btn { text-align: left; font: inherit; color: inherit; cursor: pointer; font-weight: normal; padding: 12px 14px; }
+.stat-btn:hover { border-color: var(--accent); }
+
+dialog {
+  width: min(620px, 92vw);
+  max-height: 80vh;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+dialog::backdrop { background: rgba(0,0,0,.6); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.dialog-head h2 { margin: 0; }
+.failed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; overflow-y: auto; max-height: calc(80vh - 90px); }
+.failed-list li { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.failed-list .f-name { font-weight: 600; overflow-wrap: anywhere; }
+.failed-list .f-meta { color: var(--muted); font-size: 12px; }
+.failed-list .f-error { color: var(--error); font: 12px/1.5 ui-monospace, Consolas, monospace; margin-top: 4px; overflow-wrap: anywhere; }
 
 .active { display: grid; gap: 14px; }
 .item .row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; }

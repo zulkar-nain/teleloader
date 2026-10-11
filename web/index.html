@@ -34,6 +34,7 @@
       </div>
       <div class="actions">
         <button id="start" type="button" class="primary" disabled>Start</button>
+        <button id="pause" type="button" class="secondary" disabled>Pause</button>
         <button id="stop" type="button" class="danger" disabled>Stop</button>
         <span id="form-error" class="form-error"></span>
       </div>
@@ -53,7 +54,7 @@
       <div class="card"><div class="label">Speed</div><div class="value" id="speed">0 B/s</div></div>
       <div class="card"><div class="label">ETA</div><div class="value" id="eta">--</div></div>
       <div class="card"><div class="label">Skipped</div><div class="value" id="skipped">0</div></div>
-      <div class="card"><div class="label">Failed</div><div class="value" id="failed">0</div></div>
+      <button id="failed-card" type="button" class="card stat-btn" title="View failed downloads"><div class="label">Failed</div><div class="value" id="failed">0</div></button>
     </section>
 
     <section class="card">
@@ -66,6 +67,14 @@
       <ul id="log" class="log"></ul>
     </section>
   </main>
+
+  <dialog id="failed-dialog">
+    <div class="dialog-head">
+      <h2>Failed downloads</h2>
+      <button id="failed-close" type="button" class="secondary">Close</button>
+    </div>
+    <ul id="failed-list" class="failed-list"></ul>
+  </dialog>
   <script src="/static/app.js"></script>
 </body>
 </html>
